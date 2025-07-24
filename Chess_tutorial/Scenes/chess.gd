@@ -69,6 +69,15 @@ var fifty_move_rule = 0
 var unique_board_moves : Array = []
 var amount_of_same : Array = []
 
+#MULTIPLAYER
+var side #white - true, black - false
+
+func set_turn(_turn):
+	side = _turn
+	display_board()
+	if !side:
+		$"../Camera2D".global_rotation_degrees = 180
+
 func _ready():
 	board.append([4, 2, 3, 5, 6, 3, 2, 4])
 	board.append([1, 1, 1, 1, 1, 1, 1, 1])
@@ -78,8 +87,6 @@ func _ready():
 	board.append([0, 0, 0, 0, 0, 0, 0, 0])
 	board.append([-1, -1, -1, -1, -1, -1, -1, -1])
 	board.append([-4, -2, -3, -5, -6, -3, -2, -4])
-	
-	display_board()
 	
 	var white_buttons = get_tree().get_nodes_in_group("white_pieces")
 	var black_buttons = get_tree().get_nodes_in_group("black_pieces")
@@ -91,17 +98,25 @@ func _ready():
 		button.pressed.connect(self._on_button_pressed.bind(button))
 	
 func _input(event):
-	if event is InputEventMouseButton && event.pressed && promotion_square == null:
-		if event.button_index == MOUSE_BUTTON_LEFT:
-			if is_mouse_out(): return
-			var var1 = snapped(get_global_mouse_position().x, 0) / CELL_WIDTH
-			var var2 = abs(snapped(get_global_mouse_position().y, 0)) / CELL_WIDTH
-			if !state && (white && board[var2][var1] > 0 || !white && board[var2][var1] < 0):
-				selected_piece = Vector2(var2, var1)
-				show_options()
-				state = true
-			elif state: set_move(var2, var1)
-			
+	if side != null && side == white:
+		if event is InputEventMouseButton && event.pressed && promotion_square == null:
+			if event.button_index == MOUSE_BUTTON_LEFT:
+				if is_mouse_out(): return
+				var var1 = snapped(get_global_mouse_position().x, 0) / CELL_WIDTH
+				var var2 = abs(snapped(get_global_mouse_position().y, 0)) / CELL_WIDTH
+				if !state && (white && board[var2][var1] > 0 || !white && board[var2][var1] < 0):
+					selected_piece = Vector2(var2, var1)
+					show_options()
+					state = true
+				elif state:
+					if moves.has(Vector2(var2, var1)):
+						if !is_promotion_square(selected_piece, Vector2(var2, var1)):
+							get_parent().send_move(selected_piece, Vector2(var2, var1))
+						set_move(selected_piece, Vector2(var2, var1))
+						
+					delete_dots()
+					state = false
+
 func is_mouse_out():
 	if get_rect().has_point(to_local(get_global_mouse_position())): return false
 	return true
@@ -113,6 +128,8 @@ func display_board():
 	for i in BOARD_SIZE:
 		for j in BOARD_SIZE:
 			var holder = TEXTURE_HOLDER.instantiate()
+			if !side:
+				holder.global_rotation_degrees = 180
 			pieces.add_child(holder)
 			holder.global_position = Vector2(j * CELL_WIDTH + (CELL_WIDTH / 2), -i * CELL_WIDTH - (CELL_WIDTH / 2))
 			
@@ -152,77 +169,72 @@ func delete_dots():
 	for child in dots.get_children():
 		child.queue_free()
 
-func set_move(var2, var1):
+func set_move(start_pos : Vector2, end_pos : Vector2, promotion = null):
 	var just_now = false
-	for i in moves:
-		if i.x == var2 && i.y == var1:
-			fifty_move_rule += 1
-			if is_enemy(Vector2(var2, var1)): fifty_move_rule = 0
-			match board[selected_piece.x][selected_piece.y]:
-				1:
-					fifty_move_rule = 0
-					if i.x == 7: promote(i)
-					if i.x == 3 && selected_piece.x == 1:
-						en_passant = i
-						just_now = true
-					elif en_passant != null:
-						if en_passant.y == i.y && selected_piece.y != i.y && en_passant.x == selected_piece.x:
-							board[en_passant.x][en_passant.y] = 0
-				-1:
-					fifty_move_rule = 0
-					if i.x == 0: promote(i)
-					if i.x == 4 && selected_piece.x == 6:
-						en_passant = i
-						just_now = true
-					elif en_passant != null:
-						if en_passant.y == i.y && selected_piece.y != i.y && en_passant.x == selected_piece.x:
-							board[en_passant.x][en_passant.y] = 0
-				4:
-					if selected_piece.x == 0 && selected_piece.y == 0: white_rook_left = true
-					elif selected_piece.x == 0 && selected_piece.y == 7: white_rook_right = true
-				-4:
-					if selected_piece.x == 7 && selected_piece.y == 0: black_rook_left = true
-					elif selected_piece.x == 7 && selected_piece.y == 7: black_rook_right = true
-				6:
-					if selected_piece.x == 0 && selected_piece.y == 4:
-						white_king = true
-						if i.y == 2:
-							white_rook_left = true
-							white_rook_right = true
-							board[0][0] = 0
-							board[0][3] = 4
-						elif i.y == 6:
-							white_rook_left = true
-							white_rook_right = true
-							board[0][7] = 0
-							board[0][5] = 4
-					white_king_pos = i
-				-6:
-					if selected_piece.x == 7 && selected_piece.y == 4:
-						black_king = true
-						if i.y == 2:
-							black_rook_left = true
-							black_rook_right = true
-							board[7][0] = 0
-							board[7][3] = -4
-						elif i.y == 6:
-							black_rook_left = true
-							black_rook_right = true
-							board[7][7] = 0
-							board[7][5] = -4
-					black_king_pos = i
-			if !just_now: en_passant = null
-			board[var2][var1] = board[selected_piece.x][selected_piece.y]
-			board[selected_piece.x][selected_piece.y] = 0
-			white = !white
-			threefold_position(board)
-			display_board()
-			break
-	delete_dots()
-	state = false
+	fifty_move_rule += 1
+	if is_enemy(end_pos): fifty_move_rule = 0
+	match board[start_pos.x][start_pos.y]:
+		1:
+			fifty_move_rule = 0
+			if end_pos.x == 7: promote(end_pos, promotion)
+			if end_pos.x == 3 && start_pos.x == 1:
+				en_passant = end_pos
+				just_now = true
+			elif en_passant != null:
+				if en_passant.y == end_pos.y && start_pos.y != end_pos.y && en_passant.x == start_pos.x:
+					board[en_passant.x][en_passant.y] = 0
+		-1:
+			fifty_move_rule = 0
+			if end_pos.x == 0: promote(end_pos, promotion)
+			if end_pos.x == 4 && start_pos.x == 6:
+				en_passant = end_pos
+				just_now = true
+			elif en_passant != null:
+				if en_passant.y == end_pos.y && start_pos.y != end_pos.y && en_passant.x == start_pos.x:
+					board[en_passant.x][en_passant.y] = 0
+		4:
+			if start_pos.x == 0 && start_pos.y == 0: white_rook_left = true
+			elif start_pos.x == 0 && start_pos.y == 7: white_rook_right = true
+		-4:
+			if start_pos.x == 7 && start_pos.y == 0: black_rook_left = true
+			elif start_pos.x == 7 && start_pos.y == 7: black_rook_right = true
+		6:
+			if start_pos.x == 0 && start_pos.y == 4:
+				white_king = true
+				if end_pos.y == 2:
+					white_rook_left = true
+					white_rook_right = true
+					board[0][0] = 0
+					board[0][3] = 4
+				elif end_pos.y == 6:
+					white_rook_left = true
+					white_rook_right = true
+					board[0][7] = 0
+					board[0][5] = 4
+			white_king_pos = end_pos
+		-6:
+			if start_pos.x == 7 && start_pos.y == 4:
+				black_king = true
+				if end_pos.y == 2:
+					black_rook_left = true
+					black_rook_right = true
+					board[7][0] = 0
+					board[7][3] = -4
+				elif end_pos.y == 6:
+					black_rook_left = true
+					black_rook_right = true
+					board[7][7] = 0
+					board[7][5] = -4
+			black_king_pos = end_pos
+	if !just_now: en_passant = null
+	board[end_pos.x][end_pos.y] = board[start_pos.x][start_pos.y]
+	board[start_pos.x][start_pos.y] = 0
+	white = !white
+	threefold_position(board)
+	display_board()
 	
-	if (selected_piece.x != var2 || selected_piece.y != var1) && (white && board[var2][var1] > 0 || !white && board[var2][var1] < 0):
-		selected_piece = Vector2(var2, var1)
+	if (start_pos.x != end_pos.x || start_pos.y != end_pos.y) && (white && board[end_pos.x][end_pos.y] > 0 || !white && board[end_pos.x][end_pos.y] < 0):
+		start_pos = end_pos
 		show_options()
 		state = true
 	elif is_stalemate():
@@ -457,17 +469,21 @@ func is_empty(pos : Vector2):
 func is_enemy(pos : Vector2):
 	if white && board[pos.x][pos.y] < 0 || !white && board[pos.x][pos.y] > 0: return true
 	return false
-	
-func promote(_var : Vector2):
-	promotion_square = _var
-	white_pieces.visible = white
-	black_pieces.visible = !white
+
+func promote(_var : Vector2, promotion = null):
+	if promotion == null:
+		promotion_square = _var
+		white_pieces.visible = white
+		black_pieces.visible = !white
+	else:
+		board[_var.x][_var.y] = promotion if white else -promotion
 
 func _on_button_pressed(button):
 	var num_char = int(button.name.substr(0, 1))
 	board[promotion_square.x][promotion_square.y] = -num_char if white else num_char
 	white_pieces.visible = false
 	black_pieces.visible = false
+	get_parent().send_move(selected_piece, promotion_square, num_char)
 	promotion_square = null
 	display_board()
 
@@ -553,3 +569,10 @@ func threefold_position(var1 : Array):
 			return
 	unique_board_moves.append(var1.duplicate(true))
 	amount_of_same.append(1)
+
+func is_promotion_square(start_pos, end_pos) -> bool:
+	if abs(board[start_pos.x][start_pos.y]) == 1:
+		if end_pos.x == 7 && white || end_pos.y == 1 && !white:
+			return true
+			
+	return false
