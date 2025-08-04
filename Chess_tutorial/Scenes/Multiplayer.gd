@@ -10,7 +10,7 @@ func join(ip, port):
 	multiplayer.multiplayer_peer = multiplayer_peer
 	
 func send_move(start_pos, end_pos, promotion = null):
-	rpc_id(1, "send_move_info", multiplayer.get_unique_id(), start_pos, end_pos, promotion)
+	rpc_id(1, "send_move_info", start_pos, end_pos, promotion)
 
 @rpc
 func send_move_info():
